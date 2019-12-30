@@ -4,10 +4,11 @@ import (
 	"os"
 
 	"errors"
+	"fmt"
+
+	plugin_transition "code.cloudfoundry.org/cli/plugin/transition"
 	"code.cloudfoundry.org/cli/util/configv3"
 	"code.cloudfoundry.org/cli/util/ui"
-	"code.cloudfoundry.org/cli/plugin/transition"
-	"fmt"
 
 	"code.cloudfoundry.org/cli/command/common"
 	"code.cloudfoundry.org/cli/command/translatableerror"
@@ -57,7 +58,7 @@ func getCFConfigAndCommandUIObjects() (*configv3.Config, *ui.UI, error) {
 
 func IsPluginCommand(command string) (configv3.Plugin, bool) {
 	config, configErr := configv3.LoadConfig()
-	if(configErr != nil){
+	if configErr != nil {
 		fmt.Fprintf(os.Stderr, "Empty Config, failed to load plugins")
 		return configv3.Plugin{}, false
 	}

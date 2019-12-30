@@ -3,16 +3,16 @@
 package main
 
 import (
-	"os"
-	"code.cloudfoundry.org/cli/plugin_parser"
 	command_parser "code.cloudfoundry.org/cli/parser"
+	"code.cloudfoundry.org/cli/plugin_parser"
 	"code.cloudfoundry.org/cli/util/panichandler"
+	"os"
 )
 
 func main() {
 	var exitCode int
 	defer panichandler.HandlePanic()
-	plugin, commandIsPlugin := plugin_parser.IsPluginCommand(os.Args[0])
+	plugin, commandIsPlugin := plugin_parser.IsPluginCommand(os.Args[1])
 
 	if commandIsPlugin == true {
 		exitCode = plugin_parser.RunPlugin(plugin)
