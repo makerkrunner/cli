@@ -56,7 +56,12 @@ func getCFConfigAndCommandUIObjects() (*configv3.Config, *ui.UI, error) {
 	return cfConfig, commandUI, err
 }
 
-func IsPluginCommand(command string) (configv3.Plugin, bool) {
+func IsPluginCommand(osArgs []string) (configv3.Plugin, bool) {
+
+	if len(osArgs) < 2 {
+		return configv3.Plugin{}, false
+	}
+	command := osArgs[1]
 	config, configErr := configv3.LoadConfig()
 	if configErr != nil {
 		fmt.Fprintf(os.Stderr, "Empty Config, failed to load plugins")

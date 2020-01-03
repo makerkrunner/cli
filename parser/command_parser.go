@@ -37,6 +37,7 @@ type TriggerLegacyMain interface {
 
 // TODO Unwind this code, remove specific edge case just for v2v3 app command
 const switchToV2 = -3
+const unknownCommandCode = -666
 
 var ErrFailed = errors.New("command failed")
 var ParseErr = errors.New("incorrect type for arg")
@@ -76,7 +77,12 @@ func parse(args []string, commandList interface{}) int {
 func handleFlagErrorAndCommandHelp(flagErr *flags.Error, parser *flags.Parser, extraArgs []string, originalArgs []string, commandList interface{}) int {
 	switch flagErr.Type {
 	case flags.ErrHelp:
-		commandExists := isCommand(parser.Active.Name)
+		_, commandExists := reflect.TypeOf(common.Commands).FieldByNameFunc(
+			func(fieldName string) bool {
+				field, _ := reflect.TypeOf(common.Commands).FieldByName(fieldName)
+				return parser.Active != nil && parser.Active.Name == field.Tag.Get("command")
+			},
+		)
 
 		var helpExitCode int
 
@@ -106,7 +112,12 @@ func handleFlagErrorAndCommandHelp(flagErr *flags.Error, parser *flags.Parser, e
 		}
 
 	case flags.ErrUnknownFlag, flags.ErrExpectedArgument, flags.ErrInvalidChoice:
-		commandExists := isCommand(parser.Active.Name)
+		_, commandExists := reflect.TypeOf(common.Commands).FieldByNameFunc(
+			func(fieldName string) bool {
+				field, _ := reflect.TypeOf(common.Commands).FieldByName(fieldName)
+				return parser.Active != nil && parser.Active.Name == field.Tag.Get("command")
+			},
+		)
 
 		if commandExists && flagErr.Type == flags.ErrUnknownFlag && (parser.Active.Name == "set-env" || parser.Active.Name == "v3-set-env") {
 			newArgs := []string{}
@@ -130,8 +141,8 @@ func handleFlagErrorAndCommandHelp(flagErr *flags.Error, parser *flags.Parser, e
 		return 1
 	case flags.ErrUnknownCommand:
 		if !isHelpCommand(originalArgs) {
-				// TODO Extract handling of unknown commands/suggested  commands out of legacy
-				cmd.Main(os.Getenv("CF_TRACE"), os.Args)
+			// TODO Extract handling of unknown commands/suggested  commands out of legacy
+			return unknownCommandCode
 		} else {
 			helpExitCode := parse([]string{"help", originalArgs[0]}, commandList)
 			return helpExitCode
