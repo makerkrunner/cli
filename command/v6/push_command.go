@@ -13,12 +13,12 @@ import (
 	"code.cloudfoundry.org/cli/command/flag"
 	"code.cloudfoundry.org/cli/command/translatableerror"
 	"code.cloudfoundry.org/cli/command/v6/shared"
-	sharedV3 "code.cloudfoundry.org/cli/command/v6/shared"
+	sharedV3 "code.cloudfoundry.org/cli/command/v7/shared"
 	"code.cloudfoundry.org/cli/util/configv3"
 	"code.cloudfoundry.org/cli/util/manifest"
 	"code.cloudfoundry.org/cli/util/progressbar"
+	logcache "code.cloudfoundry.org/log-cache/pkg/client"
 	"github.com/cloudfoundry/bosh-cli/director/template"
-	"github.com/cloudfoundry/noaa/consumer"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -80,8 +80,8 @@ type PushCommand struct {
 	ApplicationSummaryActor shared.ApplicationSummaryActor
 	ProgressBar             ProgressBar
 
-	RestartActor RestartActor
-	NOAAClient   *consumer.Consumer
+	RestartActor   RestartActor
+	LogCacheClient *logcache.Client
 }
 
 func (cmd *PushCommand) Setup(config command.Config, ui command.UI) error {
@@ -95,7 +95,7 @@ func (cmd *PushCommand) Setup(config command.Config, ui command.UI) error {
 		return err
 	}
 
-	ccClientV3, _, err := sharedV3.NewV3BasedClients(config, ui, true)
+	ccClientV3, _, err := shared.NewV3BasedClients(config, ui, true)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func (cmd *PushCommand) Setup(config command.Config, ui command.UI) error {
 
 	cmd.ApplicationSummaryActor = v2v3action.NewActor(v2Actor, v3Actor)
 
-	cmd.NOAAClient = shared.NewNOAAClient(ccClient.DopplerEndpoint(), config, uaaClient, ui)
+	cmd.LogCacheClient = sharedV3.NewLogCacheClient(ccClientV3.Info.LogCache(), config, ui)
 
 	cmd.ProgressBar = progressbar.NewProgressBar()
 	return nil
@@ -196,7 +196,7 @@ func (cmd PushCommand) Execute(args []string) error {
 		}
 
 		if !cmd.NoStart {
-			messages, logErrs, appState, apiWarnings, errs := cmd.RestartActor.RestartApplication(updatedConfig.CurrentApplication.Application, cmd.NOAAClient)
+			messages, logErrs, appState, apiWarnings, errs := cmd.RestartActor.RestartApplication(updatedConfig.CurrentApplication.Application, cmd.LogCacheClient)
 			err = shared.PollStart(cmd.UI, cmd.Config, messages, logErrs, appState, apiWarnings, errs)
 			if err != nil {
 				return err

@@ -10,6 +10,7 @@ import (
 	"code.cloudfoundry.org/cli/command/flag"
 	"code.cloudfoundry.org/cli/command/v7/shared"
 	"code.cloudfoundry.org/clock"
+	"code.cloudfoundry.org/cli/actor/loggingaction"
 )
 
 //go:generate counterfeiter . LogsActor
@@ -91,7 +92,13 @@ func (cmd LogsCommand) displayRecentLogs() error {
 	)
 
 	for _, message := range messages {
-		cmd.UI.DisplayLogMessage(message, true)
+		cmd.UI.DisplayLogMessage(loggingaction.LogMessage{
+			Message:        message.Message(),
+			MessageType:    message.Type(),
+			Timestamp:      message.Timestamp(),
+			SourceType:     message.SourceType(),
+			SourceInstance: message.SourceInstance(),
+		}, true)
 	}
 
 	cmd.UI.DisplayWarnings(warnings)
@@ -119,7 +126,13 @@ func (cmd LogsCommand) streamLogs() error {
 				break
 			}
 
-			cmd.UI.DisplayLogMessage(message, true)
+				cmd.UI.DisplayLogMessage(loggingaction.LogMessage{
+					Message:        message.Message(),
+					MessageType:    message.Type(),
+					Timestamp:      message.Timestamp(),
+					SourceType:     message.SourceType(),
+					SourceInstance: message.SourceInstance(),
+				}, true)
 		case logErr, ok := <-logErrs:
 			if !ok {
 				errLogsClosed = true

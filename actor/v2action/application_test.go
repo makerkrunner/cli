@@ -1,6 +1,9 @@
 package v2action_test
 
 import (
+	"code.cloudfoundry.org/cli/actor/loggingaction"
+	"code.cloudfoundry.org/cli/actor/loggingaction/loggingactionfakes"
+	"context"
 	"errors"
 	"time"
 
@@ -11,9 +14,11 @@ import (
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv2"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv2/constant"
 	"code.cloudfoundry.org/cli/types"
-	"github.com/cloudfoundry/sonde-go/events"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
+	logcache "code.cloudfoundry.org/log-cache/pkg/client"
 )
 
 var _ = Describe("Application Actions", func() {
@@ -655,17 +660,14 @@ var _ = Describe("Application Actions", func() {
 
 	Describe("StartApplication/RestartApplication", func() {
 		var (
-			app            Application
-			fakeNOAAClient *v2actionfakes.FakeNOAAClient
+			app                Application
+			fakeLogCacheClient *loggingactionfakes.FakeLogCacheClient
 
-			messages <-chan *LogMessage
+			messages <-chan loggingaction.LogMessage
 			logErrs  <-chan error
 			appState <-chan ApplicationStateChange
 			warnings <-chan string
 			errs     <-chan error
-
-			eventStream chan *events.LogMessage
-			errStream   chan error
 		)
 
 		BeforeEach(func() {
@@ -678,21 +680,15 @@ var _ = Describe("Application Actions", func() {
 				Instances: types.NullInt{Value: 2, IsSet: true},
 			}
 
-			fakeNOAAClient = new(v2actionfakes.FakeNOAAClient)
-			fakeNOAAClient.TailingLogsStub = func(_ string, _ string) (<-chan *events.LogMessage, <-chan error) {
-				eventStream = make(chan *events.LogMessage)
-				errStream = make(chan error)
-				return eventStream, errStream
-			}
+			fakeLogCacheClient = new(loggingactionfakes.FakeLogCacheClient)
 
-			closed := false
-			fakeNOAAClient.CloseStub = func() error {
-				if !closed {
-					closed = true
-					close(errStream)
-					close(eventStream)
-				}
-				return nil
+			fakeLogCacheClient.ReadStub = func(
+				ctx context.Context,
+				sourceID string,
+				start time.Time,
+				opts ...logcache.ReadOption,
+			) ([]*loggregator_v2.Envelope, error) {
+				return nil, ctx.Err()
 			}
 
 			appCount := 0
@@ -853,6 +849,8 @@ var _ = Describe("Application Actions", func() {
 						Eventually(warnings).Should(Receive(Equal("state-warning")))
 						Eventually(warnings).Should(Receive(Equal("app-warnings-1")))
 						Eventually(warnings).Should(Receive(Equal("app-warnings-2")))
+						Eventually(messages).Should(BeClosed())
+						Eventually(logErrs).Should(BeClosed())
 						Eventually(appState).Should(Receive(Equal(ApplicationStateStarting)))
 						Eventually(warnings).Should(Receive(Equal("app-instance-warnings-1")))
 						Eventually(errs).Should(Receive(MatchError(expectedErr)))
@@ -872,6 +870,8 @@ var _ = Describe("Application Actions", func() {
 						Eventually(warnings).Should(Receive(Equal("state-warning")))
 						Eventually(warnings).Should(Receive(Equal("app-warnings-1")))
 						Eventually(warnings).Should(Receive(Equal("app-warnings-2")))
+						Eventually(messages).Should(BeClosed())
+						Eventually(logErrs).Should(BeClosed())
 						Eventually(appState).Should(Receive(Equal(ApplicationStateStarting)))
 						Eventually(errs).Should(Receive(MatchError(actionerror.StartupTimeoutError{Name: "some-app"})))
 
@@ -895,6 +895,8 @@ var _ = Describe("Application Actions", func() {
 						Eventually(warnings).Should(Receive(Equal("state-warning")))
 						Eventually(warnings).Should(Receive(Equal("app-warnings-1")))
 						Eventually(warnings).Should(Receive(Equal("app-warnings-2")))
+						Eventually(messages).Should(BeClosed())
+						Eventually(logErrs).Should(BeClosed())
 						Eventually(appState).Should(Receive(Equal(ApplicationStateStarting)))
 						Eventually(warnings).Should(Receive(Equal("app-instance-warnings-1")))
 						Eventually(errs).Should(Receive(MatchError(actionerror.ApplicationInstanceCrashedError{Name: "some-app"})))
@@ -919,6 +921,8 @@ var _ = Describe("Application Actions", func() {
 						Eventually(warnings).Should(Receive(Equal("state-warning")))
 						Eventually(warnings).Should(Receive(Equal("app-warnings-1")))
 						Eventually(warnings).Should(Receive(Equal("app-warnings-2")))
+						Eventually(messages).Should(BeClosed())
+						Eventually(logErrs).Should(BeClosed())
 						Eventually(appState).Should(Receive(Equal(ApplicationStateStarting)))
 						Eventually(warnings).Should(Receive(Equal("app-instance-warnings-1")))
 						Eventually(errs).Should(Receive(MatchError(actionerror.ApplicationInstanceFlappingError{Name: "some-app"})))
@@ -938,6 +942,8 @@ var _ = Describe("Application Actions", func() {
 					Eventually(warnings).Should(Receive(Equal("state-warning")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-1")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-2")))
+					Eventually(messages).Should(BeClosed())
+					Eventually(logErrs).Should(BeClosed())
 					Eventually(appState).Should(Receive(Equal(ApplicationStateStarting)))
 					Eventually(warnings).Should(Receive(Equal("app-instance-warnings-1")))
 					Eventually(warnings).Should(Receive(Equal("app-instance-warnings-2")))
@@ -953,7 +959,6 @@ var _ = Describe("Application Actions", func() {
 
 					Expect(fakeCloudControllerClient.GetApplicationCallCount()).To(Equal(2))
 					Expect(fakeCloudControllerClient.GetApplicationApplicationInstancesCallCount()).To(Equal(2))
-					Eventually(fakeNOAAClient.CloseCallCount).Should(Equal(2))
 				})
 			})
 
@@ -970,6 +975,8 @@ var _ = Describe("Application Actions", func() {
 					Eventually(warnings).Should(Receive(Equal("state-warning")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-1")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-2")))
+					Eventually(messages).Should(BeClosed())
+					Eventually(logErrs).Should(BeClosed())
 					Consistently(appState).ShouldNot(Receive(Equal(ApplicationStateStarting)))
 
 					Expect(fakeConfig.PollingIntervalCallCount()).To(Equal(1))
@@ -1018,7 +1025,7 @@ var _ = Describe("Application Actions", func() {
 			})
 
 			JustBeforeEach(func() {
-				messages, logErrs, appState, warnings, errs = actor.StartApplication(app, fakeNOAAClient)
+				messages, logErrs, appState, warnings, errs = actor.StartApplication(app, fakeLogCacheClient)
 			})
 
 			When("the app is already staged", func() {
@@ -1031,6 +1038,8 @@ var _ = Describe("Application Actions", func() {
 					Eventually(warnings).Should(Receive(Equal("state-warning")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-1")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-2")))
+					Eventually(messages).Should(BeClosed())
+					Eventually(logErrs).Should(BeClosed())
 					Eventually(appState).Should(Receive(Equal(ApplicationStateStarting)))
 					Eventually(warnings).Should(Receive(Equal("app-instance-warnings-1")))
 					Eventually(warnings).Should(Receive(Equal("app-instance-warnings-2")))
@@ -1056,7 +1065,7 @@ var _ = Describe("Application Actions", func() {
 			})
 
 			JustBeforeEach(func() {
-				messages, logErrs, appState, warnings, errs = actor.RestartApplication(app, fakeNOAAClient)
+				messages, logErrs, appState, warnings, errs = actor.RestartApplication(app, fakeLogCacheClient)
 			})
 
 			When("application is running", func() {
@@ -1071,6 +1080,8 @@ var _ = Describe("Application Actions", func() {
 					Eventually(warnings).Should(Receive(Equal("state-warning")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-1")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-2")))
+					Eventually(messages).Should(BeClosed())
+					Eventually(logErrs).Should(BeClosed())
 					Eventually(appState).Should(Receive(Equal(ApplicationStateStarting)))
 					Eventually(warnings).Should(Receive(Equal("app-instance-warnings-1")))
 					Eventually(warnings).Should(Receive(Equal("app-instance-warnings-2")))
@@ -1092,7 +1103,6 @@ var _ = Describe("Application Actions", func() {
 
 					Expect(fakeCloudControllerClient.GetApplicationCallCount()).To(Equal(2))
 					Expect(fakeCloudControllerClient.GetApplicationApplicationInstancesCallCount()).To(Equal(2))
-					Eventually(fakeNOAAClient.CloseCallCount).Should(Equal(2))
 				})
 
 				When("updating the application to stop fails", func() {
@@ -1136,6 +1146,8 @@ var _ = Describe("Application Actions", func() {
 					Eventually(warnings).Should(Receive(Equal("state-warning")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-1")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-2")))
+					Eventually(messages).Should(BeClosed())
+					Eventually(logErrs).Should(BeClosed())
 					Eventually(appState).Should(Receive(Equal(ApplicationStateStarting)))
 					Eventually(warnings).Should(Receive(Equal("app-instance-warnings-1")))
 					Eventually(warnings).Should(Receive(Equal("app-instance-warnings-2")))
@@ -1159,6 +1171,8 @@ var _ = Describe("Application Actions", func() {
 					Eventually(warnings).Should(Receive(Equal("state-warning")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-1")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-2")))
+					Eventually(messages).Should(BeClosed())
+					Eventually(logErrs).Should(BeClosed())
 					Eventually(appState).Should(Receive(Equal(ApplicationStateStarting)))
 					Eventually(warnings).Should(Receive(Equal("app-instance-warnings-1")))
 					Eventually(warnings).Should(Receive(Equal("app-instance-warnings-2")))
@@ -1177,7 +1191,7 @@ var _ = Describe("Application Actions", func() {
 
 		Describe("RestageApplication", func() {
 			JustBeforeEach(func() {
-				messages, logErrs, appState, warnings, errs = actor.RestageApplication(app, fakeNOAAClient)
+				messages, logErrs, appState, warnings, errs = actor.RestageApplication(app, fakeLogCacheClient)
 			})
 
 			When("restaging succeeds", func() {
@@ -1193,6 +1207,8 @@ var _ = Describe("Application Actions", func() {
 					Eventually(warnings).Should(Receive(Equal("state-warning")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-1")))
 					Eventually(warnings).Should(Receive(Equal("app-warnings-2")))
+					Eventually(messages).Should(BeClosed())
+					Eventually(logErrs).Should(BeClosed())
 					Eventually(appState).Should(Receive(Equal(ApplicationStateStarting)))
 					Eventually(warnings).Should(Receive(Equal("app-instance-warnings-1")))
 					Eventually(warnings).Should(Receive(Equal("app-instance-warnings-2")))
@@ -1207,7 +1223,6 @@ var _ = Describe("Application Actions", func() {
 
 					Expect(fakeCloudControllerClient.GetApplicationCallCount()).To(Equal(2))
 					Expect(fakeCloudControllerClient.GetApplicationApplicationInstancesCallCount()).To(Equal(2))
-					Eventually(fakeNOAAClient.CloseCallCount).Should(Equal(2))
 				})
 
 				ItHandlesStagingIssues()

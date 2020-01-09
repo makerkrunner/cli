@@ -336,8 +336,7 @@ var _ = Describe("Verbose", func() {
 		)
 	})
 
-	//TODO
-	XDescribe("NOAA", func() {
+	Describe("NOAA", func() {
 		var orgName string
 
 		BeforeEach(func() {

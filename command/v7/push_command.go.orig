@@ -20,7 +20,6 @@ import (
 	"code.cloudfoundry.org/clock"
 	"github.com/cloudfoundry/bosh-cli/director/template"
 	log "github.com/sirupsen/logrus"
-	"code.cloudfoundry.org/cli/actor/loggingaction"
 )
 
 //go:generate counterfeiter . ProgressBar
@@ -596,13 +595,7 @@ func (cmd PushCommand) getLogs(logStream <-chan v7action.LogMessage, errStream <
 				return
 			}
 			if logMessage.Staging() {
-				cmd.UI.DisplayLogMessage(loggingaction.LogMessage{
-					Message:        logMessage.Message(),
-					MessageType:    logMessage.Type(),
-					Timestamp:      logMessage.Timestamp(),
-					SourceType:     logMessage.SourceType(),
-					SourceInstance: logMessage.SourceInstance(),
-				}, false)
+				cmd.UI.DisplayLogMessage(logMessage, false)
 			}
 		case err, open := <-errStream:
 			if !open {
