@@ -105,10 +105,9 @@ func handleFlagErrorAndCommandHelp(flagErr *flags.Error, parser *flags.Parser, e
 					helpExitCode = parse(extraArgs[1:], commandList)
 				}
 			}
-
-			if helpExitCode > 0 {
-				return 1
-			}
+		}
+		if helpExitCode > 0 {
+			return 1
 		}
 
 	case flags.ErrUnknownFlag, flags.ErrExpectedArgument, flags.ErrInvalidChoice:

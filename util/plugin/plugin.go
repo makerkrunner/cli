@@ -1,4 +1,4 @@
-package plugin_parser
+package plugin
 
 import (
 	"os"
@@ -14,6 +14,9 @@ import (
 	"code.cloudfoundry.org/cli/command/translatableerror"
 )
 
+var ErrFailed = errors.New("command failed")
+var ParseErr = errors.New("incorrect type for arg")
+
 type DisplayUsage interface {
 	DisplayUsage()
 }
@@ -25,8 +28,26 @@ type UI interface {
 	FlushDeferred()
 }
 
-var ErrFailed = errors.New("command failed")
-var ParseErr = errors.New("incorrect type for arg")
+func IsPluginCommand(osArgs []string) (configv3.Plugin, bool) {
+
+	if len(osArgs) < 2 {
+		return configv3.Plugin{}, false
+	}
+	command := osArgs[1]
+	config, configErr := configv3.LoadConfig()
+	if configErr != nil {
+		fmt.Fprintf(os.Stderr, "Empty Config, failed to load plugins")
+		return configv3.Plugin{}, false
+	}
+	for _, plugin := range config.Plugins() {
+		for _, pluginCommand := range plugin.Commands {
+			if command == pluginCommand.Name || command == pluginCommand.Alias {
+				return plugin, true
+			}
+		}
+	}
+	return configv3.Plugin{}, false
+}
 
 func RunPlugin(plugin configv3.Plugin) int {
 	_, commandUI, err := getCFConfigAndCommandUIObjects()
@@ -54,27 +75,6 @@ func getCFConfigAndCommandUIObjects() (*configv3.Config, *ui.UI, error) {
 	}
 	commandUI, err := ui.NewUI(cfConfig)
 	return cfConfig, commandUI, err
-}
-
-func IsPluginCommand(osArgs []string) (configv3.Plugin, bool) {
-
-	if len(osArgs) < 2 {
-		return configv3.Plugin{}, false
-	}
-	command := osArgs[1]
-	config, configErr := configv3.LoadConfig()
-	if configErr != nil {
-		fmt.Fprintf(os.Stderr, "Empty Config, failed to load plugins")
-		return configv3.Plugin{}, false
-	}
-	for _, plugin := range config.Plugins() {
-		for _, pluginCommand := range plugin.Commands {
-			if command == pluginCommand.Name || command == pluginCommand.Alias {
-				return plugin, true
-			}
-		}
-	}
-	return configv3.Plugin{}, false
 }
 
 func handleError(passedErr error, commandUI UI) error {
