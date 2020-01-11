@@ -43,9 +43,9 @@ var ErrFailed = errors.New("command failed")
 var ParseErr = errors.New("incorrect type for arg")
 
 func ParseCommandFromArgs(args []string) int {
-	exitStatus := parse(os.Args[1:], &common.Commands)
+	exitStatus := parse(args, &common.Commands)
 	if exitStatus == switchToV2 {
-		exitStatus = parse(os.Args[1:], &common.FallbackCommands)
+		exitStatus = parse(args, &common.FallbackCommands)
 	}
 	return exitStatus
 }

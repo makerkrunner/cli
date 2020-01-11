@@ -30,10 +30,10 @@ type UI interface {
 
 func IsPluginCommand(osArgs []string) (configv3.Plugin, bool) {
 
-	if len(osArgs) < 2 {
+	if len(osArgs) < 1 {
 		return configv3.Plugin{}, false
 	}
-	command := osArgs[1]
+	command := osArgs[0]
 	config, configErr := configv3.LoadConfig()
 	if configErr != nil {
 		fmt.Fprintf(os.Stderr, "Empty Config, failed to load plugins")

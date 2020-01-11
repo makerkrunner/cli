@@ -17,14 +17,14 @@ func main() {
 	var exitCode int
 	defer panichandler.HandlePanic()
 
-	exitCode = command_parser.ParseCommandFromArgs(os.Args)
+	exitCode = command_parser.ParseCommandFromArgs(os.Args[1:])
 	if exitCode == unknownCommandCode {
-		plugin, commandIsPlugin := plugin_util.IsPluginCommand(os.Args)
+		plugin, commandIsPlugin := plugin_util.IsPluginCommand(os.Args[1:])
 
 		if commandIsPlugin == true {
 			exitCode = plugin_util.RunPlugin(plugin)
 		} else {
-			cmd.Main(os.Getenv("CF_TRACE"), os.Args)
+			cmd.Main(os.Getenv("CF_TRACE"), os.Args[1:])
 		}
 	}
 
