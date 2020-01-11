@@ -76,41 +76,7 @@ func parse(args []string, commandList interface{}) int {
 
 func handleFlagErrorAndCommandHelp(flagErr *flags.Error, parser *flags.Parser, extraArgs []string, originalArgs []string, commandList interface{}) int {
 	switch flagErr.Type {
-	case flags.ErrHelp:
-		_, commandExists := reflect.TypeOf(common.Commands).FieldByNameFunc(
-			func(fieldName string) bool {
-				field, _ := reflect.TypeOf(common.Commands).FieldByName(fieldName)
-				return parser.Active != nil && parser.Active.Name == field.Tag.Get("command")
-			},
-		)
-
-		var helpExitCode int
-
-		if commandExists {
-			helpExitCode = parse([]string{"help", parser.Active.Name}, commandList)
-		} else {
-			switch len(extraArgs) {
-			case 0:
-				helpExitCode = parse([]string{"help"}, commandList)
-			case 1:
-				if !isOption(extraArgs[0]) || (len(originalArgs) > 1 && extraArgs[0] == "-a") {
-					helpExitCode = parse([]string{"help", extraArgs[0]}, commandList)
-				} else {
-					helpExitCode = parse([]string{"help"}, commandList)
-				}
-			default:
-				if isCommand(extraArgs[0]) {
-					helpExitCode = parse([]string{"help", extraArgs[0]}, commandList)
-				} else {
-					helpExitCode = parse(extraArgs[1:], commandList)
-				}
-			}
-		}
-		if helpExitCode > 0 {
-			return 1
-		}
-
-	case flags.ErrUnknownFlag, flags.ErrExpectedArgument, flags.ErrInvalidChoice:
+	case flags.ErrHelp, flags.ErrUnknownFlag, flags.ErrExpectedArgument, flags.ErrInvalidChoice:
 		_, commandExists := reflect.TypeOf(common.Commands).FieldByNameFunc(
 			func(fieldName string) bool {
 				field, _ := reflect.TypeOf(common.Commands).FieldByName(fieldName)
@@ -131,8 +97,35 @@ func handleFlagErrorAndCommandHelp(flagErr *flags.Error, parser *flags.Parser, e
 			return 0
 		}
 
-		fmt.Fprintf(os.Stderr, "Incorrect Usage: %s\n\n", flagErr.Error())
-		return 1
+		if flagErr.Type == flags.ErrUnknownFlag || flagErr.Type == flags.ErrExpectedArgument || flagErr.Type == flags.ErrInvalidChoice {
+			fmt.Fprintf(os.Stderr, "Incorrect Usage: %s\n\n", flagErr.Error())
+		}
+
+		var helpExitCode int
+		if commandExists {
+			helpExitCode = parse([]string{"help", parser.Active.Name}, commandList)
+		} else {
+			switch len(extraArgs) {
+			case 0:
+				helpExitCode = parse([]string{"help"}, commandList)
+			case 1:
+				if !isOption(extraArgs[0]) || (len(originalArgs) > 1 && extraArgs[0] == "-a") {
+					helpExitCode = parse([]string{"help", extraArgs[0]}, commandList)
+				} else {
+					helpExitCode = parse([]string{"help"}, commandList)
+				}
+			default:
+				if isCommand(extraArgs[0]) {
+					helpExitCode = parse([]string{"help", extraArgs[0]}, commandList)
+				} else {
+					helpExitCode = parse(extraArgs[1:], commandList)
+				}
+			}
+		}
+
+		if helpExitCode > 0 || flagErr.Type == flags.ErrUnknownFlag || flagErr.Type == flags.ErrExpectedArgument || flagErr.Type == flags.ErrInvalidChoice {
+			return 1
+		}
 
 	case flags.ErrRequired, flags.ErrMarshal:
 		fmt.Fprintf(os.Stderr, "Incorrect Usage: %s\n\n", flagErr.Error())
